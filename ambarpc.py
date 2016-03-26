@@ -211,8 +211,13 @@ if __name__ == '__main__':
     def vf_stop(*args, **kwargs):
         print '*** STOPPING ***'
 
+    @c.event.connect_via('video_record_complete')
+    def complete(type, param):
+        print 'File saved in', param
+
     @c.event.connect
     def testing(*args, **kwargs):
         print 'event:', args, kwargs
 
     pprint.pprint(c.battery())
+    c.run()
