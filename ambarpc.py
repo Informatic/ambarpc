@@ -7,25 +7,58 @@ import time
 
 
 # Known msg_ids
+MSG_CONFIG_GET = 1  # AMBA_GET_SETTING
 MSG_CONFIG_SET = 2
-MSG_CONFIG_GET = 3
+MSG_CONFIG_GET_ALL = 3
+
+MSG_FORMAT = 4
 MSG_STORAGE_USAGE = 5
+
 MSG_STATUS = 7
 MSG_BATTERY = 13
+
 MSG_AUTHENTICATE = 257
-MSG_PREVIEW_STOP = 258
 MSG_PREVIEW_START = 259
+MSG_PREVIEW_STOP = 260  # 258 previously, which ends current session
+
 MSG_RECORD_START = 513
 MSG_RECORD_STOP = 514
 MSG_CAPTURE = 769
 
+MSG_RECORD_TIME = 515  # Returns param: recording length
 
-# File management messages, not supported yet
-MSG_RM = 1281
-MSG_LS = 1282
-MSG_CD = 1283
-MSG_DOWNLOAD_CHUNK = 1285
-MSG_UPLOAD_CHUNK = 1286
+# File management messages
+MSG_RM = 1281  # Param: path, supports wildcards
+MSG_LS = 1282  # (Optional) Param: directory (path to file kills the server)
+MSG_CD = 1283  # Param: directory, Returns pwd: current directory
+MSG_MEDIAINFO = 1026  # Param: filename, returns media_type, date, duration,
+# framerate, size, resolution, ...
+
+# Not supported yet
+MSG_DOWNLOAD_CHUNK = 1285  # param, offset, fetch_size
+MSG_DOWNLOAD_CANCEL = 1287  # param
+MSG_UPLOAD_CHUNK = 1286  # md5sum, param (path), size, offset
+
+# Other random msg ids found throughout app / binaries
+MSG_GET_SINGLE_SETTING_OPTIONS = 9  # ~same as MSG_CONFIG_GET_ALL with param
+MSG_SD_SPEED = 16777218  # Returns rval: -13
+MSG_SD_TYPE = 16777217  # Returns param: sd_hc
+MSG_GET_THUMB = 1025  # Type: thumb, param: path, returns -21 if already exists
+
+# No response...?
+MSG_QUERY_SESSION_HOLDER = 1793  # ??
+
+MSG_UNKNOW = 83886081  # likely non-existent
+
+MSG_BITRATE = 16  # Unknown syntax, param
+
+# Unknown syntax, both take type, set takes param too
+MSG_DIGITAL_ZOOM = 15
+MSG_DIGITAL_ZOOM_SET = 14
+
+# Sends wifi_will_shutdown event after that, takes a looong time (up to 2
+# minutes)
+MSG_RESTART_WIFI = 16777225
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +161,7 @@ class AmbaRPCClient(object):
                 raise TimeoutException()
 
             try:
-                self._buffer += self._socket.recv(512)
+                self._buffer += self._socket.recv(1024)
             except socket.timeout:
                 pass
 
@@ -147,22 +180,25 @@ class AmbaRPCClient(object):
         while True:
             self.wait_for_message()
 
-    def get_config(self):
-        """Returns dictionary of config values"""
-        data = self.call(MSG_CONFIG_GET)['param']
+    def config_get(self, param=None):
+        """Returns dictionary of config values or single config"""
+        if param:
+            return self.call(MSG_CONFIG_GET, type=param)['param']
+
+        data = self.call(MSG_CONFIG_GET_ALL)['param']
 
         # Downloaded config is list of single-item dicts
         return dict(reduce(lambda o, c: o + c.items(), data, []))
 
-    def set_config(self, param, value):
+    def config_set(self, param, value):
         """Sets single config value"""
         # Wicked.
         return self.call(MSG_CONFIG_SET, param=value, type=param)
 
-    def describe_config(self, param):
+    def config_describe(self, param):
         """Returns config type (`settable` or `readonly`) and possible values
         when settable"""
-        resp = self.call(MSG_CONFIG_GET, param=param)
+        resp = self.call(MSG_CONFIG_GET_ALL, param=param)
         type, _, values = resp['param'][0][param].partition(':')
         return (type, values.split('#') if values else [])
 
@@ -171,29 +207,64 @@ class AmbaRPCClient(object):
         self.send_message(MSG_CAPTURE)
         return self.wait_for_message(MSG_STATUS, type='photo_taken')['param']
 
-    def start_preview(self):
+    def preview_start(self):
         """Starts RTSP preview stream available on rtsp://addr/live"""
         return self.call(MSG_PREVIEW_START, param='none_force')
 
-    def stop_preview(self):
+    def preview_stop(self):
         """Stops live preview"""
         return self.call(MSG_PREVIEW_STOP)
 
-    def start_record(self):
+    def record_start(self):
         """Starts video recording"""
         return self.call(MSG_RECORD_START)
 
-    def stop_record(self):
+    def record_stop(self):
         """Stops video recording"""
         return self.call(MSG_RECORD_STOP)
+
+    def record_time(self):
+        """Returns current recording length"""
+        return self.call(MSG_RECORD_TIME)['param']
 
     def battery(self):
         """Returns battery status"""
         return self.call(MSG_BATTERY)
 
     def storage_usage(self, type='free'):
-        """Returns `free` or `total` storage available."""
+        """Returns `free` or `total` storage available"""
         return self.call(MSG_STORAGE_USAGE, type=type)
+
+    def storage_format(self):
+        """Formats SD card, use with CAUTION!"""
+        return self.call(MSG_FORMAT)
+
+    def ls(self, path):
+        """Returns list of files, adding " -D -S" to path will return more
+        info"""
+        return self.call(MSG_LS, param=path)
+
+    def cd(self, path):
+        """Enters directory"""
+        return self.call(MSG_CD, param=path)
+
+    def rm(self, path):
+        """Removes file, supports wildcards"""
+        return self.call(MSG_RM, param=path)
+
+    def mediainfo(self, path):
+        """Returns information about media file, such as media_type, date,
+        duration, framerate, size, resolution, ..."""
+        return self.call(MSG_MEDIAINFO, param=path)
+
+    # Deprecated
+    start_preview = preview_start
+    stop_preview = preview_stop
+    start_record = record_start
+    stop_record = record_stop
+    get_config = config_get
+    set_config = config_set
+    describe_config = config_describe
 
 
 if __name__ == '__main__':
