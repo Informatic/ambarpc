@@ -34,6 +34,9 @@ MSG_CD = 1283  # Param: directory, Returns pwd: current directory
 MSG_MEDIAINFO = 1026  # Param: filename, returns media_type, date, duration,
 # framerate, size, resolution, ...
 
+MSG_DIGITAL_ZOOM = 15  # type: current returns current zoom value
+MSG_DIGITAL_ZOOM_SET = 14  # type: fast, param: zoom level
+
 # Not supported yet
 MSG_DOWNLOAD_CHUNK = 1285  # param, offset, fetch_size
 MSG_DOWNLOAD_CANCEL = 1287  # param
@@ -41,24 +44,26 @@ MSG_UPLOAD_CHUNK = 1286  # md5sum, param (path), size, offset
 
 # Other random msg ids found throughout app / binaries
 MSG_GET_SINGLE_SETTING_OPTIONS = 9  # ~same as MSG_CONFIG_GET_ALL with param
-MSG_SD_SPEED = 16777218  # Returns rval: -13
-MSG_SD_TYPE = 16777217  # Returns param: sd_hc
+MSG_SD_SPEED = 0x1000002  # Returns rval: -13
+MSG_SD_TYPE = 0x1000001  # Returns param: sd_hc
 MSG_GET_THUMB = 1025  # Type: thumb, param: path, returns -21 if already exists
 
 # No response...?
 MSG_QUERY_SESSION_HOLDER = 1793  # ??
 
-MSG_UNKNOW = 83886081  # likely non-existent
+MSG_UNKNOW = 0x5000001  # likely non-existent
 
 MSG_BITRATE = 16  # Unknown syntax, param
 
-# Unknown syntax, both take type, set takes param too
-MSG_DIGITAL_ZOOM = 15
-MSG_DIGITAL_ZOOM_SET = 14
-
 # Sends wifi_will_shutdown event after that, takes a looong time (up to 2
 # minutes)
-MSG_RESTART_WIFI = 16777225
+MSG_RESTART_WIFI = 0x1000009
+
+MSG_SET_SOFTAP_CONFIG = 0x2000001
+MSG_GET_SOFTAP_CONFIG = 0x2000002
+MSG_RESTART_WEBSERVER = 0x2000003
+
+MSG_UPGRADE = 0x1000003  # param: upgrade file
 
 logger = logging.getLogger(__name__)
 
@@ -256,6 +261,14 @@ class AmbaRPCClient(object):
         """Returns information about media file, such as media_type, date,
         duration, framerate, size, resolution, ..."""
         return self.call(MSG_MEDIAINFO, param=path)
+
+    def zoom_get(self):
+        """Gets current digital zoom value"""
+        return self.call(MSG_DIGITAL_ZOOM, type='current')['param']
+
+    def zoom_set(self, value):
+        """Sets digital zoom"""
+        return self.call(MSG_DIGITAL_ZOOM_SET, type='fast', param=value)
 
     # Deprecated
     start_preview = preview_start
