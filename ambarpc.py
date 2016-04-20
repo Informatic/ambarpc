@@ -4,6 +4,7 @@ import logging
 import pprint
 import socket
 import time
+import hashlib
 
 
 # Known msg_ids
@@ -115,7 +116,7 @@ class AmbaRPCClient(object):
         """Sends a single RPC message"""
         kwargs.setdefault('msg_id', msg_id)
         kwargs.setdefault('token', self.token)
-        logger.debug('>> %r', kwargs)
+        logger.debug('[%s] >> %r', self.address, kwargs)
 
         self._socket.send(json.dumps(kwargs))
 
@@ -132,7 +133,7 @@ class AmbaRPCClient(object):
 
             return None
 
-        logger.debug('<< %r', data)
+        logger.debug('[%s] << %r', self.address, data)
 
         self._buffer = self._buffer[end_index:]
 
@@ -257,6 +258,15 @@ class AmbaRPCClient(object):
         """Removes file, supports wildcards"""
         return self.call(MSG_RM, param=path)
 
+    def upload(self, path, contents, offset=0):
+        """Uploads bytes to selected path at offset"""
+        return self.call(
+            MSG_UPLOAD_CHUNK,
+            md5sum=hashlib.md5(contents).hexdigest(),
+            param=path,
+            size=len(contents),
+            offset=offset)
+
     def mediainfo(self, path):
         """Returns information about media file, such as media_type, date,
         duration, framerate, size, resolution, ..."""
@@ -264,11 +274,11 @@ class AmbaRPCClient(object):
 
     def zoom_get(self):
         """Gets current digital zoom value"""
-        return self.call(MSG_DIGITAL_ZOOM, type='current')['param']
+        return int(self.call(MSG_DIGITAL_ZOOM, type='current')['param'])
 
     def zoom_set(self, value):
         """Sets digital zoom"""
-        return self.call(MSG_DIGITAL_ZOOM_SET, type='fast', param=value)
+        return self.call(MSG_DIGITAL_ZOOM_SET, type='fast', param=str(value))
 
     # Deprecated
     start_preview = preview_start
